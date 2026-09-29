@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Can a model flag declining pages better than an age rule? | Content-decay research paper</title>
+<meta name="description" content="A client-held-out evaluation of a random forest versus a hand-written rule for ranking pages that are losing search impressions, on 30,000 anonymized pages from the FlyRank ML Internship dataset.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📉</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=Schibsted+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F5F7F6; --panel:#EBEFEE; --ink:#17202B; --muted:#56606C; --line:#D3DADD;
+  --model:#16707A; --model-soft:#CFE5E7; --rule:#8E979F; --ghost:#C6CDD2;
+  --amber:#8A5200; --amber-bg:#FBF1DC; --amber-line:#E4C488; --link:#11606A;
+  --serif:"Newsreader",Georgia,"Times New Roman",serif;
+  --sans:"Schibsted Grotesk",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#12171C; --panel:#1B2229; --ink:#E3E8EC; --muted:#9AA5B0; --line:#2C363F;
+    --model:#5DB8C2; --model-soft:#1D3A3E; --rule:#7D8790; --ghost:#3A454F;
+    --amber:#F0B85C; --amber-bg:#2A2114; --amber-line:#5C4521; --link:#7CCAD3;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#12171C; --panel:#1B2229; --ink:#E3E8EC; --muted:#9AA5B0; --line:#2C363F;
+  --model:#5DB8C2; --model-soft:#1D3A3E; --rule:#7D8790; --ghost:#3A454F;
+  --amber:#F0B85C; --amber-bg:#2A2114; --amber-line:#5C4521; --link:#7CCAD3;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:calc(env(safe-area-inset-top,0px) + 16px);scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--serif);font-size:1.1875rem;line-height:1.62;font-optical-sizing:auto}
+a{color:var(--link);text-underline-offset:.18em;text-decoration-thickness:1px}
+a:hover{text-decoration-thickness:2px}
+:focus-visible{outline:3px solid var(--model);outline-offset:2px;border-radius:2px}
+img,svg{max-width:100%}
+
+.layout{display:grid;grid-template-columns:minmax(0,1fr);max-width:1120px;margin:0 auto;padding:0 20px}
+@media (min-width:1000px){.layout{grid-template-columns:220px minmax(0,1fr);column-gap:56px;padding:0 32px}}
+
+/* contents rail */
+.toc{font-family:var(--sans);font-size:.875rem;padding:20px 0 0}
+.toc details{border:1px solid var(--line);border-radius:6px;padding:10px 14px;background:var(--panel)}
+.toc summary{cursor:pointer;font-weight:600}
+.toc ol{list-style:none;margin:12px 0 4px;padding:0;counter-reset:s}
+.toc li{counter-increment:s;margin:0}
+.toc a{display:grid;grid-template-columns:1.6em 1fr;padding:5px 0;color:var(--muted);text-decoration:none;line-height:1.35}
+.toc a::before{content:counter(s);color:var(--model);font-weight:600;font-variant-numeric:tabular-nums}
+.toc a:hover,.toc a[aria-current="true"]{color:var(--ink)}
+.toc a[aria-current="true"]::before{color:var(--ink)}
+@media (min-width:1000px){
+  .toc{position:sticky;top:env(safe-area-inset-top,0px);align-self:start;padding-top:72px;max-height:100vh;overflow:auto}
+  .toc details{border:0;background:none;padding:0}
+  .toc summary{list-style:none;pointer-events:none;color:var(--ink);margin-bottom:4px}
+  .toc summary::-webkit-details-marker{display:none}
+}
+
+main{max-width:44rem;padding-bottom:96px}
+header.paper-head{padding:40px 0 8px}
+@media (min-width:1000px){header.paper-head{padding-top:72px}}
+.kicker{font-family:var(--sans);font-size:.9375rem;color:var(--muted);margin:0 0 18px}
+h1{font-family:var(--serif);font-weight:500;font-size:clamp(2.1rem,5.2vw,3.35rem);line-height:1.08;letter-spacing:-.018em;margin:0 0 22px;max-width:18ch;text-wrap:balance}
+.byline{font-family:var(--sans);font-size:.9375rem;color:var(--muted);display:flex;flex-wrap:wrap;gap:6px 22px;margin:0 0 36px;padding:0}
+.byline li{list-style:none}
+.byline strong{color:var(--ink);font-weight:600}
+
+.abstract{border-left:3px solid var(--model);padding:4px 0 4px 22px;margin:0 0 28px}
+.abstract h2{font-size:1rem;margin:0 0 6px}
+.abstract p{margin:0;font-size:1.1875rem}
+
+.correction{background:var(--amber-bg);border:1px solid var(--amber-line);border-radius:6px;padding:16px 20px;margin:0 0 8px;font-family:var(--sans);font-size:.9688rem;line-height:1.55}
+.correction strong{color:var(--amber)}
+.correction p{margin:0}
+
+section{padding-top:28px}
+h2{font-family:var(--sans);font-weight:600;font-size:1.5rem;letter-spacing:-.01em;line-height:1.25;margin:40px 0 14px;display:flex;gap:.55em;align-items:baseline}
+h2 .n{color:var(--model);font-variant-numeric:tabular-nums;font-weight:700}
+h3{font-family:var(--sans);font-weight:600;font-size:1.125rem;margin:30px 0 8px}
+p{margin:0 0 1em}
+ul,ol{padding-left:1.3em;margin:0 0 1.1em}
+li{margin:0 0 .45em}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.84em;background:var(--panel);padding:.08em .35em;border-radius:3px;overflow-wrap:anywhere}
+
+figure{margin:30px 0 34px}
+@media (min-width:1000px){figure.wide{margin-right:-4rem}}
+.fig-box{background:var(--panel);border-radius:8px;padding:18px 18px 10px;overflow-x:auto}
+.fig-box svg{display:block;width:100%;height:auto;min-width:480px}
+figcaption{font-family:var(--sans);font-size:.9375rem;line-height:1.5;color:var(--muted);margin-top:10px;max-width:40rem}
+figcaption b{color:var(--ink);font-weight:600}
+
+/* svg styling */
+svg text{font-family:var(--sans);fill:var(--muted);font-size:12.5px}
+svg .tick.sub{font-size:11px}
+svg .axis{font-size:12.5px;fill:var(--muted)}
+svg .val{font-weight:600;fill:var(--ink);font-size:13px;font-variant-numeric:tabular-nums}
+svg .rowlab{fill:var(--ink);font-weight:600;font-size:13px}
+svg .note{font-size:12px;fill:var(--muted)}
+svg .grid{stroke:var(--line);stroke-width:1}
+svg .baseline-line{stroke:var(--muted);stroke-width:1.25;stroke-dasharray:5 4}
+svg .bar-model{fill:var(--model)}
+svg .bar-rule{fill:var(--rule)}
+svg .bar-ghost{fill:none;stroke:var(--model);stroke-width:1.5;stroke-dasharray:4 3}
+svg .line-model{fill:none;stroke:var(--model);stroke-width:2.5}
+svg .line-rule{fill:none;stroke:var(--rule);stroke-width:2.5}
+svg .dot-model{fill:var(--model)}
+svg .dot-rule{fill:var(--paper);stroke:var(--rule);stroke-width:2.5}
+svg .lab-model{fill:var(--model);font-weight:600}
+svg .lab-rule{fill:var(--muted);font-weight:600}
+svg .dumbbell{stroke:var(--ghost);stroke-width:4;stroke-linecap:round}
+svg .base-tick{stroke:var(--ink);stroke-width:2}
+
+.table-wrap{overflow-x:auto;margin:22px 0 28px}
+table{border-collapse:collapse;width:100%;font-family:var(--sans);font-size:.9375rem;font-variant-numeric:tabular-nums;min-width:520px}
+caption{text-align:left;color:var(--muted);font-size:.9375rem;padding-bottom:10px;caption-side:top}
+th,td{text-align:left;padding:9px 12px 9px 0;border-bottom:1px solid var(--line);vertical-align:top}
+thead th{font-weight:600;color:var(--ink);border-bottom:2px solid var(--ink)}
+td.num,th.num{text-align:right;padding-right:0;padding-left:12px}
+tr.hl td{font-weight:600}
+tr.hl td:first-child{box-shadow:inset 3px 0 0 var(--model);padding-left:10px}
+
+.pass{color:var(--model);font-weight:600}
+.fail{color:var(--amber);font-weight:600}
+
+ol.ranked{list-style:none;padding:0;counter-reset:r}
+ol.ranked>li{counter-increment:r;display:grid;grid-template-columns:2.2rem 1fr;gap:0 10px;padding:14px 0;border-top:1px solid var(--line);margin:0}
+ol.ranked>li:last-child{border-bottom:1px solid var(--line)}
+ol.ranked>li::before{content:counter(r);font-family:var(--sans);font-weight:700;font-size:1.25rem;color:var(--model);line-height:1.4}
+ol.ranked strong{font-family:var(--sans);font-weight:600;display:block;margin-bottom:2px}
+ol.ranked p{margin:0}
+
+.cite{font-family:var(--sans);font-size:.875rem;color:var(--muted);background:var(--panel);border-radius:6px;padding:14px 16px;overflow-x:auto}
+footer{font-family:var(--sans);font-size:.875rem;color:var(--muted);border-top:1px solid var(--line);margin-top:56px;padding-top:18px}
+</style>
+</head>
+<body>
+<div class="layout">
+
+<nav class="toc" aria-label="Contents">
+  <details open id="tocbox">
+    <summary>Contents</summary>
+    <ol>
+      <li><a href="#abstract">Abstract</a></li>
+      <li><a href="#introduction">Introduction</a></li>
+      <li><a href="#data">Data</a></li>
+      <li><a href="#methodology">Methodology</a></li>
+      <li><a href="#results">Results</a></li>
+      <li><a href="#limitations">Limitations</a></li>
+      <li><a href="#recommendations">Recommendations</a></li>
+      <li><a href="#reproducibility">Reproducibility</a></li>
+      <li><a href="#acknowledgments">Acknowledgments</a></li>
+    </ol>
+  </details>
+</nav>
+
+<main id="top">
+<header class="paper-head">
+  <p class="kicker">FlyRank ML Internship capstone, content-decay track</p>
+  <h1>Can a model flag declining pages better than an age rule?</h1>
+  <ul class="byline">
+    <li>By <strong>Ayushi</strong></li>
+    <li>September 2026</li>
+    <li><a href="https://github.com/Ayushi-369/FlyrankAi-Internship">Code and notebooks on GitHub</a></li>
+  </ul>
+</header>
+
+<section id="abstract" class="abstract" aria-labelledby="abs-h" style="padding-top:0">
+  <h2 id="abs-h"><span class="n">1</span>Abstract</h2>
+  <p>Content teams need to know which published pages are losing search visibility, and a common rule of thumb flags old pages that rank on page one with weak click-through. We studied 30,000 pages from 32 pseudonymized clients in the FlyRank ML Internship dataset, labelling a page as declining when its search impressions fell more than 20% between two consecutive 30-day windows (54% of pages). We compared that rule with a small random forest on five page-level features, using five-fold cross-validation grouped by client so every test page came from a client the model had never seen. The model's top-10% review queue was 67% declining on average (55–81% across folds), against 53% for the rule and 54% for random ordering, and it beat the rule in all five folds. The lift is real but modest, so we present the model as a decision-support queue for editors rather than a predictor of recovery.</p>
+</section>
+
+<aside class="correction" role="note">
+  <p><strong>Correction to an earlier draft.</strong> A previous version of this work reported 0.99 precision. That number came from label leakage: the label was a freshness tier computed directly from <code>days_since_last_update</code>, which was also a model feature. A one-line rule reproduces that label on 100% of rows. Every number on this page uses the corrected label, and the check is in the notebook.</p>
+</aside>
+
+<section id="introduction">
+<h2><span class="n">2</span>Introduction</h2>
+<p>Picture a content lead with 3,000 published articles and enough writer time to revisit about 300 of them this month. Some pages are quietly losing search impressions; others are stable or growing. Every rewrite spent on a healthy page is an hour not spent on one that is slipping.</p>
+<p>The usual shortcut is age: refresh what is old, especially old pages that rank well but earn few clicks. Our Week-4 baseline encoded exactly that. The question for this paper is whether a small learned model, tested on clients it never trained on, can order the review queue better than that rule.</p>
+<p>The data gave the rule a problem before any model was trained. In this slice, older pages were <em>less</em> likely to be declining, not more.</p>
+
+<figure>
+  <div class="fig-box"><svg viewBox="0 0 680 300" role="img" aria-label="Share of pages declining by content age quartile: 60%, 64%, 49%, 42%. Older pages declined less often." xmlns="http://www.w3.org/2000/svg"><line class="grid" x1="56" x2="660" y1="240.0" y2="240.0"/><text class="tick" x="48" y="244.0" text-anchor="end">0%</text><line class="grid" x1="56" x2="660" y1="185.0" y2="185.0"/><text class="tick" x="48" y="189.0" text-anchor="end">20%</text><line class="grid" x1="56" x2="660" y1="130.0" y2="130.0"/><text class="tick" x="48" y="134.0" text-anchor="end">40%</text><line class="grid" x1="56" x2="660" y1="75.0" y2="75.0"/><text class="tick" x="48" y="79.0" text-anchor="end">60%</text><line class="grid" x1="56" x2="660" y1="20.0" y2="20.0"/><text class="tick" x="48" y="24.0" text-anchor="end">80%</text><rect class="bar-model" x="89.2" y="75.0" width="84.6" height="165.0" rx="2"/><text class="val" x="131.5" y="67.0" text-anchor="middle">60%</text><text class="tick" x="131.5" y="260" text-anchor="middle">90–132 days</text><text class="tick sub" x="131.5" y="276" text-anchor="middle">n = 7,518</text><rect class="bar-model" x="240.2" y="64.0" width="84.6" height="176.0" rx="2"/><text class="val" x="282.5" y="56.0" text-anchor="middle">64%</text><text class="tick" x="282.5" y="260" text-anchor="middle">133–236</text><text class="tick sub" x="282.5" y="276" text-anchor="middle">n = 8,128</text><rect class="bar-model" x="391.2" y="104.2" width="84.6" height="135.8" rx="2"/><text class="val" x="433.5" y="96.2" text-anchor="middle">49%</text><text class="tick" x="433.5" y="260" text-anchor="middle">237–333</text><text class="tick sub" x="433.5" y="276" text-anchor="middle">n = 6,917</text><rect class="bar-model" x="542.2" y="124.0" width="84.6" height="116.0" rx="2"/><text class="val" x="584.5" y="116.0" text-anchor="middle">42%</text><text class="tick" x="584.5" y="260" text-anchor="middle">334–564</text><text class="tick sub" x="584.5" y="276" text-anchor="middle">n = 7,437</text><line class="baseline-line" x1="56" x2="660" y1="91.0" y2="91.0"/><text class="note" x="660" y="85.0" text-anchor="end">all pages 54%</text><text class="axis" x="358.0" y="296" text-anchor="middle">Content age quartile</text></svg></div>
+  <figcaption><b>Figure 1.</b> Share of pages whose impressions fell more than 20%, by content-age quartile (all 30,000 pages). The oldest quartile declined least often, 42% against a 54% average. This is an observed pattern in one snapshot, not a causal effect of age.</figcaption>
+</figure>
+</section>
+
+<section id="data">
+<h2><span class="n">3</span>Data</h2>
+<p>We used the anonymized starter slice of the FlyRank ML Internship dataset: one row per content item, with search and engagement metrics aggregated over a trailing 90-day window ending at export. The larger ~79-million-row warehouse release was not used for this paper; extending the work to it is listed as a next step.</p>
+<div class="table-wrap">
+<table>
+  <caption>What the analysis runs on</caption>
+  <tbody>
+    <tr><th scope="row">Source file</th><td><code>data/raw/content_refresh_anonymized.csv</code></td></tr>
+    <tr><th scope="row">Size</th><td>30,000 pages, 44 columns, 32 pseudonymized clients (one client holds 7,008 pages)</td></tr>
+    <tr><th scope="row">Time windows</th><td>Features: 90-day aggregates. Label: last 30 days vs the 30 days before.</td></tr>
+    <tr><th scope="row">Label</th><td>Declining = impressions fell more than 20% (<code>trend_direction == "down"</code>). 16,262 pages, 54.2%.</td></tr>
+    <tr><th scope="row">Rows excluded</th><td>None. The five feature columns have no missing values.</td></tr>
+    <tr><th scope="row">Columns excluded</th><td><code>trend_direction</code>, <code>trend_pct</code> and all <code>*_last_30d</code> / <code>*_prev_30d</code> columns (the label and its inputs); <code>freshness_tier</code> (derived from a feature); IDs, used only to group the split.</td></tr>
+    <tr><th scope="row">Public safety</th><td>The file has no client names, domains, URLs, page titles or search queries. This page shows only aggregates.</td></tr>
+  </tbody>
+</table>
+</div>
+</section>
+
+<section id="methodology">
+<h2><span class="n">4</span>Methodology</h2>
+
+<h3>Assumptions</h3>
+<p>We assume a page's current 90-day metrics describe its state well enough to rank it for human review, and that clients differ enough that a useful model must work on clients it has not seen. We do not assume that a flagged page will recover if refreshed.</p>
+
+<h3>Features</h3>
+<p>Five page-level features: content age in days, days since last update, average search position, click-through rate and engagement rate. Rates are stored as percentages, so a CTR value of 0.76 means 0.76%.</p>
+
+<h3>Baseline</h3>
+<p>The Week-4 rule scores a page 90 if it is older than 365 days, ranks in positions 1–10 and has CTR under 2%; 60 if it is older than 500 days; 50 if it ranks 1–10 with CTR under 2%; otherwise 0. The original code compared CTR with 0.02 instead of 2.0 (CTR is stored in percent), so it tested for 0.02%. We fixed the unit here so the baseline gets a fair test. Ties in the rule's score are broken at random.</p>
+
+<h3>Model</h3>
+<p>A random forest with 300 trees, maximum depth 6, at least 20 pages per leaf, balanced class weights and seed 42. It is deliberately small, so its behaviour stays close to what the features can support.</p>
+
+<h3>Validation design</h3>
+<p>Five-fold cross-validation grouped by client (<code>GroupKFold</code>): every page in a test fold belongs to a client that contributed nothing to training. This asks the question a new client would ask: does the ranking work on my pages? The main metric is precision in the top 10% of each fold's queue, which is the share of pages an editor reviews that are truly declining. ROC-AUC is reported alongside as an overall ranking measure. Model and rule are scored on the same folds.</p>
+
+<h3>Leakage checks</h3>
+<div class="table-wrap">
+<table>
+  <caption>Three checks, run before trusting any number</caption>
+  <thead><tr><th>Check</th><th>What we found</th><th>Verdict</th></tr></thead>
+  <tbody>
+    <tr><td>Is the old label derived from a feature?</td><td><code>days_since_last_update ≥ 91</code> reproduces the freshness-tier label on 100% of rows, and the model scored 0.990 precision on it.</td><td class="fail">Leak, label replaced</td></tr>
+    <tr><td>Does the corrected model depend on one suspect feature?</td><td>Training without <code>days_since_last_update</code> gives AUC 0.606 and top-10% precision 0.697, close to the full model.</td><td class="pass">No collapse</td></tr>
+    <tr><td>Does a random split flatter the model?</td><td>Random split: AUC 0.706. Client-grouped split: AUC 0.614. The gap is the model memorizing client-level patterns.</td><td class="pass">Grouped result reported</td></tr>
+  </tbody>
+</table>
+</div>
+</section>
+
+<section id="results">
+<h2><span class="n">5</span>Results</h2>
+<p>On clients it had never seen, the model's top-10% queue contained 67% declining pages. Random ordering would give 54%, and the rule gave 53%, which is no better than chance.</p>
+
+<div class="table-wrap">
+<table>
+  <caption>Model vs baseline, same five client-grouped folds (mean, with standard deviation across folds)</caption>
+  <thead><tr><th>Ordering</th><th class="num">Precision, top 10%</th><th class="num">ROC-AUC</th></tr></thead>
+  <tbody>
+    <tr><td>Random ordering (base rate)</td><td class="num">0.544</td><td class="num">0.500</td></tr>
+    <tr><td>Week-4 rule</td><td class="num">0.531 ± 0.076</td><td class="num">0.516 ± 0.050</td></tr>
+    <tr class="hl"><td>Random forest</td><td class="num">0.668 ± 0.108</td><td class="num">0.614 ± 0.068</td></tr>
+  </tbody>
+</table>
+</div>
+
+<figure class="wide">
+  <div class="fig-box"><svg viewBox="0 0 680 330" role="img" aria-label="Per fold, top-10% precision: the model beat the rule in all five client-held-out folds, by 6 to 28 points." xmlns="http://www.w3.org/2000/svg"><line class="grid" x1="150.0" x2="150.0" y1="26" y2="276"/><text class="tick" x="150.0" y="294" text-anchor="middle">30%</text><line class="grid" x1="231.7" x2="231.7" y1="26" y2="276"/><text class="tick" x="231.7" y="294" text-anchor="middle">40%</text><line class="grid" x1="313.3" x2="313.3" y1="26" y2="276"/><text class="tick" x="313.3" y="294" text-anchor="middle">50%</text><line class="grid" x1="395.0" x2="395.0" y1="26" y2="276"/><text class="tick" x="395.0" y="294" text-anchor="middle">60%</text><line class="grid" x1="476.7" x2="476.7" y1="26" y2="276"/><text class="tick" x="476.7" y="294" text-anchor="middle">70%</text><line class="grid" x1="558.3" x2="558.3" y1="26" y2="276"/><text class="tick" x="558.3" y="294" text-anchor="middle">80%</text><line class="grid" x1="640.0" x2="640.0" y1="26" y2="276"/><text class="tick" x="640.0" y="294" text-anchor="middle">90%</text><circle class="dot-rule" cx="150" cy="14" r="5"/><text class="lab-rule" x="160" y="18">Week-4 rule</text><circle class="dot-model" cx="270" cy="14" r="5"/><text class="lab-model" x="280" y="18">Random forest</text><line class="base-tick" x1="400" x2="400" y1="7" y2="21"/><text class="note" x="408" y="18">base rate in that fold</text><text class="rowlab" x="0" y="50">Fold 1</text><text class="tick sub" x="0" y="66" text-anchor="start">1 held-out client</text><line class="base-tick" x1="305.2" x2="305.2" y1="36" y2="56"/><line class="dumbbell" x1="331.3" x2="466.9" y1="46" y2="46"/><circle class="dot-rule" cx="331.3" cy="46" r="6"/><circle class="dot-model" cx="466.9" cy="46" r="6"/><text class="val lab-model" x="477.9" y="50">69%</text><text class="rowlab" x="0" y="100">Fold 2</text><text class="tick sub" x="0" y="116" text-anchor="start">7 held-out clients</text><line class="base-tick" x1="431.8" x2="431.8" y1="86" y2="106"/><line class="dumbbell" x1="439.1" x2="488.1" y1="96" y2="96"/><circle class="dot-rule" cx="439.1" cy="96" r="6"/><circle class="dot-model" cx="488.1" cy="96" r="6"/><text class="val lab-model" x="499.1" y="100">71%</text><text class="rowlab" x="0" y="150">Fold 3</text><text class="tick sub" x="0" y="166" text-anchor="start">8 held-out clients</text><line class="base-tick" x1="214.5" x2="214.5" y1="136" y2="156"/><line class="dumbbell" x1="277.4" x2="352.5" y1="146" y2="146"/><circle class="dot-rule" cx="277.4" cy="146" r="6"/><circle class="dot-model" cx="352.5" cy="146" r="6"/><text class="val lab-model" x="363.5" y="150">55%</text><text class="rowlab" x="0" y="200">Fold 4</text><text class="tick sub" x="0" y="216" text-anchor="start">8 held-out clients</text><line class="base-tick" x1="413.0" x2="413.0" y1="186" y2="206"/><line class="dumbbell" x1="344.4" x2="569.8" y1="196" y2="196"/><circle class="dot-rule" cx="344.4" cy="196" r="6"/><circle class="dot-model" cx="569.8" cy="196" r="6"/><text class="val lab-model" x="580.8" y="200">81%</text><text class="rowlab" x="0" y="250">Fold 5</text><text class="tick sub" x="0" y="266" text-anchor="start">8 held-out clients</text><line class="base-tick" x1="382.8" x2="382.8" y1="236" y2="256"/><line class="dumbbell" x1="302.7" x2="375.4" y1="246" y2="246"/><circle class="dot-rule" cx="302.7" cy="246" r="6"/><circle class="dot-model" cx="375.4" cy="246" r="6"/><text class="val lab-model" x="386.4" y="250">58%</text><text class="axis" x="395.0" y="324" text-anchor="middle">Share of top-10% queue that was truly declining</text></svg></div>
+  <figcaption><b>Figure 2.</b> Top-10% precision in each client-held-out fold. The model beat the rule in all five folds, by 6 to 28 points, but the size of the lift depends heavily on which clients are held out. In fold 5 neither ordering beat that fold's own base rate (59%). Fold 1 is a single large client.</figcaption>
+</figure>
+
+<p>The lift holds across queue sizes. It peaks around the top 10% and narrows as the queue grows toward half of all pages, which is what a useful ranking should look like.</p>
+
+<figure class="wide">
+  <div class="fig-box"><svg viewBox="0 0 680 320" role="img" aria-label="Precision at top K percent: the model stays near 62 to 67 percent; the rule stays near the 54 percent base rate." xmlns="http://www.w3.org/2000/svg"><line class="grid" x1="56" x2="560" y1="270.0" y2="270.0"/><text class="tick" x="48" y="274.0" text-anchor="end">40%</text><line class="grid" x1="56" x2="560" y1="198.6" y2="198.6"/><text class="tick" x="48" y="202.6" text-anchor="end">50%</text><line class="grid" x1="56" x2="560" y1="127.1" y2="127.1"/><text class="tick" x="48" y="131.1" text-anchor="end">60%</text><line class="grid" x1="56" x2="560" y1="55.7" y2="55.7"/><text class="tick" x="48" y="59.7" text-anchor="end">70%</text><text class="tick" x="106.4" y="290" text-anchor="middle">5%</text><text class="tick" x="156.8" y="290" text-anchor="middle">10%</text><text class="tick" x="257.6" y="290" text-anchor="middle">20%</text><text class="tick" x="358.4" y="290" text-anchor="middle">30%</text><text class="tick" x="560.0" y="290" text-anchor="middle">50%</text><line class="baseline-line" x1="56" x2="560" y1="167.1" y2="167.1"/><text class="note" x="62" y="183.1">base rate 54%</text><polyline class="line-rule" points="106.4,162.1 156.8,176.4 257.6,167.1 358.4,162.1 560.0,154.3"/><circle class="dot-rule" cx="106.4" cy="162.1" r="4"/><circle class="dot-rule" cx="156.8" cy="176.4" r="4"/><circle class="dot-rule" cx="257.6" cy="167.1" r="4"/><circle class="dot-rule" cx="358.4" cy="162.1" r="4"/><circle class="dot-rule" cx="560.0" cy="154.3" r="4"/><text class="lab-rule" x="568" y="168.3">Week-4 rule</text><polyline class="line-model" points="106.4,86.4 156.8,78.6 257.6,90.0 358.4,102.9 560.0,116.4"/><circle class="dot-model" cx="106.4" cy="86.4" r="4"/><circle class="dot-model" cx="156.8" cy="78.6" r="4"/><circle class="dot-model" cx="257.6" cy="90.0" r="4"/><circle class="dot-model" cx="358.4" cy="102.9" r="4"/><circle class="dot-model" cx="560.0" cy="116.4" r="4"/><text class="lab-model" x="568" y="114.4">Random forest</text><text class="val lab-model" x="156.8" y="66.6" text-anchor="middle">67%</text><text class="val lab-rule" x="156.8" y="196.4" text-anchor="middle">53%</text><text class="axis" x="308.0" y="314" text-anchor="middle">Share of the queue an editor reviews (top K%)</text></svg></div>
+  <figcaption><b>Figure 3.</b> Share of reviewed pages that were truly declining, by how much of the queue is reviewed (mean over five folds). The rule tracks the base rate at every depth; the model stays 7 to 12 points above the base rate.</figcaption>
+</figure>
+
+<figure>
+  <div class="fig-box"><svg viewBox="0 0 680 192" role="img" aria-label="ROC-AUC: rule 0.516, model on client-grouped split 0.614, model on random split 0.706. The random split overstates skill." xmlns="http://www.w3.org/2000/svg"><line class="grid" x1="190.0" x2="190.0" y1="10" y2="148"/><text class="tick" x="190.0" y="166" text-anchor="middle">0.50</text><line class="grid" x1="276.0" x2="276.0" y1="10" y2="148"/><text class="tick" x="276.0" y="166" text-anchor="middle">0.55</text><line class="grid" x1="362.0" x2="362.0" y1="10" y2="148"/><text class="tick" x="362.0" y="166" text-anchor="middle">0.60</text><line class="grid" x1="448.0" x2="448.0" y1="10" y2="148"/><text class="tick" x="448.0" y="166" text-anchor="middle">0.65</text><line class="grid" x1="534.0" x2="534.0" y1="10" y2="148"/><text class="tick" x="534.0" y="166" text-anchor="middle">0.70</text><line class="grid" x1="620.0" x2="620.0" y1="10" y2="148"/><text class="tick" x="620.0" y="166" text-anchor="middle">0.75</text><text class="rowlab" x="178" y="37" text-anchor="end">Rule, grouped split</text><rect class="bar-rule" x="190" y="20" width="27.5" height="24" rx="2"/><text class="val" x="225.5" y="37">0.516</text><text class="rowlab" x="178" y="83" text-anchor="end">Model, grouped split</text><rect class="bar-model" x="190" y="66" width="196.1" height="24" rx="2"/><text class="val" x="394.1" y="83">0.614</text><text class="rowlab" x="178" y="129" text-anchor="end">Model, random split</text><rect class="bar-ghost" x="190" y="112" width="354.3" height="24" rx="2"/><text class="val" x="552.3" y="129">0.706</text><text class="axis" x="405.0" y="188" text-anchor="middle">ROC-AUC (0.5 = random ordering)</text></svg></div>
+  <figcaption><b>Figure 4.</b> The dashed bar is the same model scored on a random split. It looks much better there (0.706) than on the client-grouped split (0.614). We report the grouped number, because a new client is exactly the unseen case.</figcaption>
+</figure>
+
+<h3>What the model leans on</h3>
+<p>Averaged across folds, average search position carried the most weight (0.43 of feature importance), followed by content age (0.33), days since last update (0.12), CTR (0.10) and engagement rate (0.02). Descriptively, pages ranking 11–20 declined most often (61%) and pages in the top three positions least often (24%). Pages not updated in 91 or more days declined more often than recently updated ones, 61% against 51%.</p>
+</section>
+
+<section id="limitations">
+<h2><span class="n">6</span>Limitations and honest framing</h2>
+<ul>
+  <li><strong>The lift is modest and uneven.</strong> An AUC of 0.61 is a weak-to-moderate ranking signal, and fold results range from 0.55 to 0.81 precision. In one of five folds the model's top 10% was no better than that fold's base rate. Treat the model as an ordering aid, not a verdict.</li>
+  <li><strong>Feature and label windows overlap.</strong> CTR, position and engagement are 90-day aggregates that include the 30-day label window. They are not the label, but they are not strictly earlier than it either. A forward-window design on the warehouse release would be stronger.</li>
+  <li><strong>The label is short-term.</strong> A 20% fall between two 30-day windows includes seasonality and noise, not only lasting decay.</li>
+  <li><strong>No causal claim.</strong> This is one cross-sectional snapshot. Nothing here shows that refreshing a flagged page will restore its traffic.</li>
+  <li><strong>Small, uneven sample.</strong> 32 clients, one holding about a quarter of all pages. Results may shift on the full release or on clients with different content mixes.</li>
+</ul>
+</section>
+
+<section id="recommendations">
+<h2><span class="n">7</span>Ranked recommendations</h2>
+<p>Ordered by expected value for an editorial team, given the evidence above.</p>
+<ol class="ranked">
+  <li><div><strong>Order the weekly review queue by model score, not by age.</strong><p>Reviewing the top 10% by model score surfaced declining pages 67% of the time on unseen clients, against 53% for the age rule.</p></div></li>
+  <li><div><strong>Retire age as a standalone decay signal.</strong><p>The oldest quartile declined least often in this data (42%). Age still helps inside the model, but only in combination with position.</p></div></li>
+  <li><div><strong>Within the queue, look first at stale pages ranking 11–20.</strong><p>Pages not updated in 91+ days (61% declining) and pages in positions 11–20 (61%) showed the highest observed decline rates.</p></div></li>
+  <li><div><strong>Keep an editor in the loop and log every decision.</strong><p>Record accept or reject for each flagged page. That log is the real-world precision check this offline study cannot provide.</p></div></li>
+  <li><div><strong>Revalidate on the warehouse release before scaling.</strong><p>Rebuild features strictly before a forward label window, and confirm the lift holds across more clients.</p></div></li>
+</ol>
+</section>
+
+<section id="reproducibility">
+<h2><span class="n">8</span>Reproducibility</h2>
+<p>Every number on this page is produced by one notebook, run top to bottom with seed 42 and scikit-learn's <code>GroupKFold</code> (5 folds).</p>
+<ul>
+  <li>Capstone notebook: <a href="https://github.com/Ayushi-369/FlyrankAi-Internship/blob/main/work/notebooks/capstone.ipynb">work/notebooks/capstone.ipynb</a>, or <a href="https://colab.research.google.com/github/Ayushi-369/FlyrankAi-Internship/blob/main/work/notebooks/capstone.ipynb">open it in Colab</a> and choose Run all.</li>
+  <li>Weekly working notebooks (question, data contract, baseline, model, validation audit, playbook): <a href="https://github.com/Ayushi-369/FlyrankAi-Internship/tree/main/work/notebooks">work/notebooks/</a></li>
+  <li>Repository: <a href="https://github.com/Ayushi-369/FlyrankAi-Internship">github.com/Ayushi-369/FlyrankAi-Internship</a></li>
+</ul>
+<p>To rerun locally: clone the repository, install <code>requirements.txt</code>, and run the capstone notebook from <code>work/notebooks/</code>. It reads the dataset from <code>data/raw/</code> and writes the top-10% queue (pseudonymous IDs only) to <code>work/outputs/</code>.</p>
+</section>
+
+<section id="acknowledgments">
+<h2><span class="n">9</span>Acknowledgments and data credit</h2>
+<p>Built on the <a href="https://flyrank.ai" target="_blank" rel="noopener">FlyRank ML Internship dataset</a>. Thanks to the FlyRank team for providing anonymized production search data and the internship curriculum, and to mentors whose feedback on validation design shaped the corrections in this version.</p>
+<p class="cite">Ayushi (2026). <em>Can a model flag declining pages better than an age rule?</em> FlyRank ML Internship capstone. Data: FlyRank ML Internship dataset, anonymized starter slice.</p>
+</section>
+
+<footer>
+  <p>All figures are aggregates over pseudonymized data. No client names, URLs or search queries appear on this page. <a href="#top">Back to top</a></p>
+</footer>
+</main>
+</div>
+
+<script>
+(function(){
+  var box=document.getElementById('tocbox');
+  var mq=window.matchMedia('(min-width:1000px)');
+  function sync(){ if(!mq.matches) box.removeAttribute('open'); else box.setAttribute('open',''); }
+  sync(); if(mq.addEventListener) mq.addEventListener('change',sync);
+  box.querySelectorAll('a').forEach(function(a){a.addEventListener('click',function(){ if(!mq.matches) box.removeAttribute('open'); });});
+  if(!('IntersectionObserver' in window)) return;
+  var links={}; box.querySelectorAll('a').forEach(function(a){links[a.getAttribute('href').slice(1)]=a;});
+  var io=new IntersectionObserver(function(es){
+    es.forEach(function(e){ if(e.isIntersecting){
+      Object.values(links).forEach(function(l){l.removeAttribute('aria-current');});
+      var l=links[e.target.id]; if(l) l.setAttribute('aria-current','true');
+    }});
+  },{rootMargin:'-20% 0px -70% 0px'});
+  document.querySelectorAll('main section[id]').forEach(function(s){io.observe(s);});
+})();
+</script>
+</body>
+</html>
